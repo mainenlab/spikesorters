@@ -41,9 +41,13 @@ try
 
     fprintf('Saving results to Phy  \n')
     rezToPhy(rez, fullfile(fpath));
-catch
-    fprintf('----------------------------------------');
-    fprintf(lasterr());
+catch err
+    fprintf('----------------------------------------\n');
+    %err = lasterr();
+    fprintf('Error in function %s.\n', err.stack(1).name);
+    fprintf('Error message: %s\n', err.message);
+    fprintf('Stack:\n');
+    fprintf('%s\n\n', getReport(err));
     quit(1);
 end
 quit(0);
