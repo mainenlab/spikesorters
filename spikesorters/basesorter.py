@@ -151,27 +151,38 @@ class BaseSorter:
             if not np.all([recording.check_if_dumpable() for recording in self.recording_list]):
                 raise RuntimeError("RecordingExtractor objects are not dumpable and can't be processed in parallel. "
                                    "Use parallel=False")
-
-        try:
-            if not parallel:
-                for i, recording in enumerate(self.recording_list):
+        # TODO: try/catch to inside loop to allow independent failure for each group
+        if not parallel:
+            for i, recording in enumerate(self.recording_list):
+                try:
                     self._run(recording, self.output_folders[i])
-            else:
+                except Exception as err:
+                    if raise_error:
+                        print(f"Spike sorting failed: {err} for group {i}. You can inspect the runtime trace in "
+                                                f"the {self.sorter_name}.log of the output folder.'")
+                        # raise SpikeSortingError(f"Spike sorting failed: {err}. You can inspect the runtime trace in "
+                        #                         f"the {self.sorter_name}.log of the output folder.'")
+                    else:
+                        run_time = None
+                        log['error'] = True
+                        log['error_trace'] = traceback.format_exc()
+        else:
+            try:
                 Parallel(n_jobs=n_jobs, backend=joblib_backend)(
                     delayed(self._run)(rec.dump_to_dict(), output_folder)
                     for (rec, output_folder) in zip(self.recording_list, self.output_folders))
+            except Exception as err:
+                if raise_error:
+                    raise SpikeSortingError(f"Spike sorting failed: {err}. You can inspect the runtime trace in "
+                                            f"the {self.sorter_name}.log of the output folder.'")
+                else:
+                    run_time = None
+                    log['error'] = True
+                    log['error_trace'] = traceback.format_exc()
 
-            t1 = time.perf_counter()
-            run_time = float(t1 - t0)
+        t1 = time.perf_counter()
+        run_time = float(t1 - t0)
 
-        except Exception as err:
-            if raise_error:
-                raise SpikeSortingError(f"Spike sorting failed: {err}. You can inspect the runtime trace in "
-                                        f"the {self.sorter_name}.log of the output folder.'")
-            else:
-                run_time = None
-                log['error'] = True
-                log['error_trace'] = traceback.format_exc()
 
         log['run_time'] = run_time
 
